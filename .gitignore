@@ -1,0 +1,32 @@
+# Betriebssystemdateien
+.DS_Store
+Thumbs.db
+
+# Editor-Dateien
+.idea/
+.vscode/
+*.sublime-project
+*.sublime-workspace
+
+# Temporäre Dateien
+*.tmp
+*.swp
+*.swo
+*~
+
+# Logs
+*.log
+logs/
+
+# Umgebungsvariablen
+.env
+.env.local
+.env.development
+.env.test
+.env.production
+
+# Node.js
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
