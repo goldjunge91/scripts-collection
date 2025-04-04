@@ -1,0 +1,22 @@
+version: '3'
+services:
+  caddy:
+    image: caddy:2
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile # Pfad innerhalb des Containers
+      - ./data:/data                     # Pfad innerhalb des Containers
+      - ./config:/config                 # Pfad innerhalb des Containers
+    networks:
+      - caddy_net
+    env_file:
+      - ./env/cloudflare.env           # Pfad relativ zum Compose-File auf dem Pi
+    environment:
+      - ACME_AGREE=true
+
+networks:
+  caddy_net:
+    external: true
