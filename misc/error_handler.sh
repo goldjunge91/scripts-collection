@@ -31,12 +31,14 @@ if [ -t 1 ]; then
     _COLOR_YELLOW="\033[0;33m"
     _COLOR_BLUE="\033[0;34m"
     _COLOR_GRAY="\033[0;90m"
+    _COLOR_GREEN="\033[0;32m"
 else
     _COLOR_RESET=""
     _COLOR_RED=""
     _COLOR_YELLOW=""
     _COLOR_BLUE=""
     _COLOR_GRAY=""
+    _COLOR_GREEN=""
 fi
 
 # --- Logging Functions ---
@@ -64,7 +66,13 @@ _write_log() {
     # Append to log file
     echo "[$timestamp] [$level] [${_SCRIPT_NAME}] $message" >> "$ERROR_LOG_FILE"
 }
-
+# Log success messages
+log_success() {
+    local message="$*"
+    # Verwende Grün für Erfolgsmeldungen
+    echo -e "${_COLOR_GREEN}SUCCESS:${_COLOR_RESET} $message"
+    _write_log "SUCCESS" "$message"
+}
 # Log informational messages
 log_info() {
     local message="$*"
@@ -208,4 +216,5 @@ setup_error_handling() {
 # }
 
 # Make functions available for export if sourced
-export -f log_info log_warn log_error log_fatal log_debug setup_error_handling
+#export -f log_info log_warn log_error log_fatal log_debug setup_error_handling
+export -f log_info log_warn log_error log_fatal log_debug log_success setup_error_handling
