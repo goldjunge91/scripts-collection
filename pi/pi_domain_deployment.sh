@@ -66,7 +66,6 @@ TARGET_DIR=${TARGET_DIR:-/home/$PI_USER}
 
 # --- SSH-Verbindung testen ---
 info "Teste SSH-Verbindung zu $PI_USER@$PI_HOST:$SSH_PORT..."
-#if ! ssh -i "$SSH_KEY" "$PI_USER@$PI_HOST:$SSH_PORT" -p "$SSH_PORT" -o ConnectTimeout=5 -o BatchMode=yes "$PI_USER@$PI_HOST" "echo 'SSH OK'" >/dev/null 2>&1; then
 if ! ssh -i "$SSH_KEY" -p $SSH_PORT $PI_USER@$PI_HOST "echo SSH-Verbindung erfolgreich" >/dev/null 2>&1; then
     error "SSH-Verbindung fehlgeschlagen. Prüfe IP/Hostname, Benutzer, Port und SSH-Schlüssel ($SSH_KEY)."
 fi
