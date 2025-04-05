@@ -40,7 +40,7 @@ echo ""
 
 # --- Lokale Konfiguration & Benutzereingaben ---
 LOCAL_USER=$(get_user_input "Geben Sie den Benutzernamen für den lokalen SSH-Schlüssel ein" "$(whoami)" is_not_empty "Leere Eingabe ist nicht erlaubt.") || exit 1
-SSH_KEY="/Users/$LOCAL_USER/.ssh/id_rsa_pi_colify" # Pfad zum SSH Private Key (LOKAL)
+SSH_KEY="/Users/$LOCAL_USER/.ssh/id_rsa_coolify_temp" # Pfad zum SSH Private Key (LOKAL)
 log_info "Verwende SSH Key: $SSH_KEY"
 
 PI_HOST=$(get_user_input "Geben Sie die IP-Adresse oder den Hostnamen des Raspberry Pi ein" "192.168.178.40" is_valid_ip_or_hostname "Ungültige IP-Adresse oder Hostname.") || exit 1
@@ -135,10 +135,10 @@ ssh -i "$SSH_KEY" -p "$SSH_PORT" -t "$PI_USER@$PI_HOST" << EOF || log_fatal "Feh
     R_info "Lade Coolify Installations-/Update-Skript herunter..."
     cd /tmp || cd \$HOME
     # Versuche wget, fallback auf curl
-    if command -v wget &> /dev/null; then
-        wget -q https://get.coolify.io/coolify.sh -O coolify.sh || R_error "Download des Coolify-Skripts mit wget fehlgeschlagen."
+    if command -v curl &> /dev/null; then
+        curl -fsSL https://cdn.coollabs.io/coolify/install.sh | sudo bash|| R_error "Download des Coolify-Skripts mit wget fehlgeschlagen."
     elif command -v curl &> /dev/null; then
-        curl -fsSL https://get.coolify.io/coolify.sh -o coolify.sh || R_error "Download des Coolify-Skripts mit curl fehlgeschlagen."
+        curl -fsSL https://cdn.coollabs.io/coolify/install.sh | sudo bash || R_error "Download des Coolify-Skripts mit curl fehlgeschlagen."
     else
          R_error "Weder wget noch curl zum Download verfügbar." # Sollte durch Check oben nicht passieren
     fi
