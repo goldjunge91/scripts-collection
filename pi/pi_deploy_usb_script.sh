@@ -37,7 +37,7 @@ error() {
 USB_SETUP_SCRIPT="/Users/marco/scripts-collection/pi/pi_usb_drive_setup.sh"
 
 # Standardpfad zum SSH-Schlüssel
-SSH_KEY="/Users/marco/.ssh/id_rsa_pi_colify"
+SSH_KEY="/Users/marco/.ssh/id_rsa_coolify_temp"
 
 # Banner anzeigen
 echo "============================================="
