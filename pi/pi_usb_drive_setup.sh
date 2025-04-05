@@ -37,10 +37,8 @@ if [ "$CONFIRM" != "j" ] && [ "$CONFIRM" != "J" ]; then
     echo "Vorgang abgebrochen."
     exit 0
 fi
-
-# Partitionierung der Festplatte
-echo "Partitioniere die Festplatte $DEVICE..."
-echo -e "o\nn\np\n1\n\n\nw" | fdisk "$DEVICE"
+# Partitionierung überspringen, da bereits eingerichtet
+echo "Überspringe Partitionierung, da Gerät bereits eingerichtet ist..."
 
 # Partition-Name ermitteln
 if [[ "$DEVICE" == *"mmcblk"* ]] || [[ "$DEVICE" == *"nvme"* ]]; then
@@ -49,9 +47,22 @@ else
     PARTITION="${DEVICE}1"
 fi
 
-# Formatieren der Partition
-echo "Formatiere Partition $PARTITION mit ext4..."
-mkfs.ext4 -F "$PARTITION"
+# Formatierung überspringen
+echo "Überspringe Formatierung, da Partition bereits formatiert ist..."
+## Partitionierung der Festplatte
+#echo "Partitioniere die Festplatte $DEVICE..."
+#echo -e "o\nn\np\n1\n\n\nw" | fdisk "$DEVICE"
+
+## Partition-Name ermitteln
+#if [[ "$DEVICE" == *"mmcblk"* ]] || [[ "$DEVICE" == *"nvme"* ]]; then
+#    PARTITION="${DEVICE}p1"
+#else
+#    PARTITION="${DEVICE}1"
+#fi
+
+## Formatieren der Partition
+#echo "Formatiere Partition $PARTITION mit ext4..."
+#mkfs.ext4 -F "$PARTITION"
 
 # UUID der Partition ermitteln
 UUID=$(blkid -s UUID -o value "$PARTITION")
