@@ -5,7 +5,6 @@
 # Nutzt user_input.sh und error_handler.sh
 
 # --- Pfade zu Hilfsskripten ---
-# Annahme: Dieses Skript liegt in 'pi/', user_input.sh in 'user/', error_handler.sh in 'misc/'
 SCRIPT_DIR_RELATIVE_PATH=$(dirname "$0")
 USER_INPUT_SCRIPT="$SCRIPT_DIR_RELATIVE_PATH/../user/user_input.sh"
 ERROR_HANDLER_SCRIPT="$SCRIPT_DIR_RELATIVE_PATH/../misc/error_handler.sh"
@@ -48,7 +47,8 @@ echo ""
 # --- SSH-Verbindung testen (LOKAL) ---
 log_info "Teste SSH-Verbindung zu $PI_USER@$PI_HOST:$SSH_PORT..."
 if ! ssh -i "$SSH_KEY" -p $SSH_PORT $PI_USER@$PI_HOST "echo SSH-Verbindung erfolgreich" >/dev/null 2>&1; then
-    log_fatal "SSH-Verbindung fehlgeschlagen. Prüfe IP/Hostname ($PI_HOST), Benutzer ($PI_USER), Port ($SSH_PORT) und SSH-Schlüssel ($SSH_KEY)."
+    # Hier wird nach der Passphrase gefragt, wenn nötig
+    log_fatal "SSH-Verbindung fehlgeschlagen. Prüfe IP/Hostname ($PI_HOST), Benutzer ($PI_USER), Port ($SSH_PORT), SSH-Schlüssel ($SSH_KEY) und Passphrase."
 fi
 log_info "SSH-Verbindung erfolgreich."
 echo ""
@@ -57,8 +57,12 @@ echo ""
 log_info "Starte Node.js Environment Setup auf dem Raspberry Pi ($PI_USER@$PI_HOST)..."
 log_warn "Einige Schritte erfordern sudo-Passworteingabe auf dem Pi oder sudo ohne Passwort."
 
-ssh -i "$SSH_KEY" -p "$SSH_PORT" -t "$PI_USER@$PI_HOST" << EOF || log_fatal "Fehler bei der Remote-Ausführung auf dem Pi (SSH-Verbindung getrennt?)."
-    # Führe alle folgenden Befehle auf dem Pi aus
+# Temporär 'set -u' lokal deaktivieren
+set +u
+log_info "Temporär 'set -u' deaktiviert für den SSH-Block."
+
+ssh -i "$SSH_KEY" -p "$SSH_PORT" -t "$PI_USER@$PI_HOST" << EOF || log_fatal "Fehler bei der Remote-Ausführung auf dem Pi (SSH-Verbindung getrennt oder Remote-Skript fehlgeschlagen)."
+    # --- Anfang des Heredoc ---
     set -e # Beende bei Fehlern im Remote-Skript
 
     # --- Remote Hilfsfunktionen ---
@@ -70,6 +74,7 @@ ssh -i "$SSH_KEY" -p "$SSH_PORT" -t "$PI_USER@$PI_HOST" << EOF || log_fatal "Feh
     R_info "*** (Remote-Ausführung auf \$HOSTNAME als \$USER) ***"
     echo "============================================="
 
+
     # 1. System-Update und Basispakete installieren
     R_info "Aktualisiere Paketlisten und installiere Basispakete (curl, git, zsh, build-essential)..."
     sudo apt-get update -y || R_warning "apt update fehlgeschlagen, versuche trotzdem fortzufahren."
@@ -79,17 +84,23 @@ ssh -i "$SSH_KEY" -p "$SSH_PORT" -t "$PI_USER@$PI_HOST" << EOF || log_fatal "Feh
 
     # 2. NVM (Node Version Manager) installieren
     R_info "Installiere NVM..."
-    # Lade und führe das NVM Installationsskript aus
-    export NVM_DIR="\$HOME/.nvm" # Exportiere für das Installationsskript
+    # *** KORREKTUR: Explizites Export von NVM_DIR HIER entfernt ***
+    # Lasse das NVM Installationsskript das Verzeichnis und die Variable verwalten
     curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.39.7/install.sh | bash || R_error "NVM Installation fehlgeschlagen."
     R_success "NVM heruntergeladen und Installationsskript ausgeführt."
 
     # NVM für die AKTUELLE Shell-Sitzung laden (wichtig für folgende Befehle)
-    # Diese Zeilen müssen genau so im Skript stehen, damit NVM geladen wird
     R_info "Lade NVM in die aktuelle Shell-Sitzung..."
-    export NVM_DIR="\$HOME/.nvm"
-    [ -s "\$NVM_DIR/nvm.sh" ] && \. "\$NVM_DIR/nvm.sh"
-    [ -s "\$NVM_DIR/bash_completion" ] && \. "\$NVM_DIR/bash_completion"
+    # Das Installationsskript sollte $HOME/.nvm erstellt haben. Wir sourcen nvm.sh von dort.
+    if [ -s "\$HOME/.nvm/nvm.sh" ]; then
+        # Definiere NVM_DIR hier, damit die gesourcte Datei es findet (manche Versionen brauchen das)
+         export NVM_DIR="\$HOME/.nvm"
+        \. "\$HOME/.nvm/nvm.sh" # Source the nvm script directly
+        # Optional: bash_completion laden, falls vorhanden
+        [ -s "\$NVM_DIR/bash_completion" ] && \. "\$NVM_DIR/bash_completion"
+    else
+        R_error "NVM Installationsskript scheint nvm.sh nicht in \$HOME/.nvm erstellt zu haben!"
+    fi
     # Überprüfen, ob nvm jetzt verfügbar ist
     if ! command -v nvm &> /dev/null; then
         R_error "NVM konnte nicht in die aktuelle Shell geladen werden!"
@@ -98,7 +109,8 @@ ssh -i "$SSH_KEY" -p "$SSH_PORT" -t "$PI_USER@$PI_HOST" << EOF || log_fatal "Feh
     echo ""
 
     # 3. NVM Konfiguration für zukünftige Logins (.bashrc, .zshrc)
-    R_info "Konfiguriere Shells (.bashrc, .zshrc), um NVM bei neuen Logins zu laden..."
+    # Dieser Teil ist weiterhin sinnvoll, da das NVM-Skript es manchmal nicht zuverlässig für alle Shells macht
+    R_info "Stelle NVM Konfiguration für zukünftige Logins sicher (.bashrc, .zshrc)..."
     NVM_CONFIG_SNIPPET='
 export NVM_DIR="$HOME/.nvm"
 [ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh" # This loads nvm
@@ -133,8 +145,7 @@ export NVM_DIR="$HOME/.nvm"
 
     # 4. Node.js (LTS) installieren
     R_info "Installiere die neueste Node.js LTS Version via NVM..."
-    # Lädt nvm (falls noch nicht geschehen, sicherheitshalber)
-    [ -s "\$NVM_DIR/nvm.sh" ] && \. "\$NVM_DIR/nvm.sh"
+    # NVM sollte jetzt geladen sein
     nvm install --lts || R_error "Installation von Node.js LTS fehlgeschlagen."
     # Setze die installierte LTS-Version als Standard
     nvm alias default lts/* || R_warning "Konnte default NVM Alias nicht setzen."
@@ -168,9 +179,42 @@ export NVM_DIR="$HOME/.nvm"
     fi
     echo ""
 
-    # 7. Abschlussprüfung (Zusammenfassung)
+    # 7. Docker Installation
+    R_info "Installiere Docker und Docker Compose..."
+    if ! command -v docker &> /dev/null; then
+        R_info "Docker wird installiert..."
+        curl -fsSL https://get.docker.com -o get-docker.sh || R_error "Konnte Docker-Installationsskript nicht herunterladen."
+        sudo sh get-docker.sh || R_error "Docker-Installation fehlgeschlagen."
+        sudo usermod -aG docker "$USER" || R_warning "Konnte Benutzer nicht zur Docker-Gruppe hinzufügen."
+        rm get-docker.sh
+        R_success "Docker installiert. WICHTIG: Docker-Gruppenänderung wird erst nach Neuanmeldung wirksam!"
+    else
+        R_info "Docker ist bereits installiert."
+        # Sicherstellen, dass der Benutzer in der Docker-Gruppe ist
+        if ! groups "$USER" | grep -q '\bdocker\b'; then
+            sudo usermod -aG docker "$USER" || R_warning "Konnte Benutzer nicht zur Docker-Gruppe hinzufügen."
+            R_info "Benutzer zur Docker-Gruppe hinzugefügt. Neuanmeldung erforderlich."
+        else
+            R_info "Benutzer ist bereits in der Docker-Gruppe."
+        fi
+    fi
+
+    # Docker Compose Plugin prüfen
+    R_info "Prüfe Docker Compose Plugin..."
+    if ! docker compose version &> /dev/null; then
+        R_info "Docker Compose Plugin nicht gefunden. Installiere..."
+        sudo apt-get update -y || R_warning "apt update fehlgeschlagen, versuche trotzdem fortzufahren."
+        sudo apt-get install -y docker-compose-plugin || R_error "Docker Compose Plugin Installation fehlgeschlagen."
+        R_success "Docker Compose Plugin installiert."
+    else
+        R_info "Docker Compose Plugin ist bereits installiert."
+    fi
+    echo ""
+
+    # 8. Abschlussprüfung (Zusammenfassung)
     R_info "Überprüfung der installierten Versionen:"
     echo -n "Zsh: "; zsh --version || echo "Nicht gefunden"
+    echo -n "Docker: "; docker --version || echo "Nicht gefunden"
     echo -n "NVM: "; nvm --version || echo "Nicht gefunden"
     echo -n "Node: "; node -v || echo "Nicht gefunden"
     echo -n "NPM: "; npm -v || echo "Nicht gefunden"
@@ -184,19 +228,23 @@ export NVM_DIR="$HOME/.nvm"
     R_warning "WICHTIG: Für NVM und global installierte NPM Pakete (wie PM2) ist möglicherweise eine Neuanmeldung (ausloggen und wieder einloggen via SSH) erforderlich, damit sie in neuen Shell-Sitzungen korrekt im PATH gefunden werden."
     R_info "Um Zsh als Standard-Shell festzulegen (optional), führe nach dem erneuten Login aus: chsh -s \$(which zsh)"
     R_info "*** (Remote-Ausführung auf Pi beendet) ***"
-
 EOF
+# --- Ende des Heredoc ---
+SSH_EXIT_CODE=$? # Exit-Code direkt nach dem SSH-Befehl speichern
 
-# Exit-Status des SSH-Befehls prüfen (wird durch log_fatal oben behandelt, falls SSH selbst fehlschlägt)
-SSH_EXIT_CODE=$?
+# 'set -u' wieder aktivieren für den Rest des lokalen Skripts
+set -u
+log_info "'set -u' wieder aktiviert."
+
+# Exit-Status des SSH-Befehls prüfen (log_fatal im || sollte das schon tun)
 if [ $SSH_EXIT_CODE -ne 0 ]; then
-     log_error "SSH-Befehl wurde unerwartet beendet (Exit Code: $SSH_EXIT_CODE). Prüfe die Remote-Logs oben."
-     exit $SSH_EXIT_CODE
+    log_error "SSH-Befehl wurde mit Exit Code $SSH_EXIT_CODE beendet (Fehler wurde evtl. schon durch log_fatal gemeldet)."
+    # exit $SSH_EXIT_CODE # Nicht unbedingt nötig
 fi
 
 echo ""
 log_info "------------------------------------------------------------------"
-log_success "Gesamtes Skript zur Einrichtung der Node.js Umgebung abgeschlossen!"
+log_success "Gesamtes Skript zur Einrichtung der Node.js Umgebung abgeschlossen!" # Wird nur erreicht, wenn SSH erfolgreich war
 log_warn "Denke daran, dich auf dem Pi neu einzuloggen, damit alle PATH-Änderungen (NVM, PM2) wirksam werden."
 log_info "------------------------------------------------------------------"
 
