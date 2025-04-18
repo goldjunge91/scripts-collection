@@ -1,45 +1,66 @@
 #!/bin/bash
 
-# Konfiguration
-# --- IMPORTANT: Set this to the correct mount point of your external drive ---
+# --- Konfiguration ---
+# --- WICHTIG: Passe dies an den korrekten Mount-Point deines externen Laufwerks an ---
 MOUNT_POINT="/Volumes/TimeMachine"
-# --- You can adjust the volume name for clarity if needed ---
-VOLUME_NAME="External Drive" # Descriptive name for notifications
+# --- Du kannst den Laufwerksnamen zur besseren Lesbarkeit anpassen ---
+LAUFWERKSNAME="Time Machine" # Kürzerer Name
+# --- Schwellenwert für Warnung (in Prozent) ---
+SCHWELLENWERT_PROZENT=90
 
-echo "Starting check for ${VOLUME_NAME} at ${MOUNT_POINT}..."
-
-# Speicherbelegung holen (Get disk usage)
-# Use df -P to prevent line wrapping, -h for human-readable (though we only use percentage)
-# Target the specific mount point, get the second line (NR==2), print the 5th field ($5), remove '%'
-df_output_percent=$(df -Ph "$MOUNT_POINT" | awk 'NR==2 {print $5}')
-echo "Debug: Raw percentage value from df: '$df_output_percent'" # Debug output
-used_percent=$(echo "$df_output_percent" | tr -d '%')
-echo "Debug: Calculated used percentage: '$used_percent'" # Debug output
-
-# Check if used_percent is actually a number
-if [[ "$used_percent" =~ ^[0-9]+$ ]]; then
-  # Always display the current usage percentage via notification and terminal
-  echo "Success: ${VOLUME_NAME} usage at ${used_percent}% (Mount: ${MOUNT_POINT})"
-  # Use osascript to show a macOS notification
-  osascript -e "display notification \"${VOLUME_NAME} usage at ${used_percent}%\" with title \"${VOLUME_NAME} Status\" subtitle \"Mount: ${MOUNT_POINT}\" sound name \"Glass\""
-
-  # Optional: Add a separate warning if a threshold is exceeded
-  THRESHOLD_PERCENT=90
-  if [[ "$used_percent" -ge "$THRESHOLD_PERCENT" ]]; then
-    echo "Warning: ${VOLUME_NAME} usage is high: ${used_percent}% (Threshold: ${THRESHOLD_PERCENT}%)"
-    osascript -e "display notification \"${VOLUME_NAME} usage is high: ${used_percent}%\" with title \"${VOLUME_NAME} Warning\" sound name \"Frog\""
-  fi
-
-elif [[ -z "$used_percent" ]] && ! mount | grep -q " on ${MOUNT_POINT} "; then
-  # Handle specific error: Drive not mounted
-  # Output error to stderr and also try notification
-  echo "Error: Drive not mounted at $MOUNT_POINT." >&2
-  osascript -e "display notification \"Drive not found at ${MOUNT_POINT}.\" with title \"${VOLUME_NAME} Check Error\" sound name \"Basso\""
-else
-  # Handle general error: used_percent is not a number or df failed
-  # Output error to stderr and also try notification
-  echo "Error: Could not determine usage percentage for $MOUNT_POINT. Value found: '$used_percent'" >&2
-  osascript -e "display notification \"Could not determine usage for ${MOUNT_POINT}.\" with title \"${VOLUME_NAME} Check Error\" sound name \"Basso\""
+# --- 1. Prüfung: Ist das Laufwerk überhaupt gemountet? ---
+# `mount | grep -q ...` sucht nach dem exakten Mount-Eintrag.
+# Der Exit-Code ist 0, wenn gefunden, 1 wenn nicht gefunden.
+# Wir wollen weitermachen, wenn es GEFUNDEN wird (Exit-Code 0).
+if ! mount | grep -q " on ${MOUNT_POINT} "; then
+  # Nicht gemountet: Still beenden (Exit-Code 0 = Erfolg, da kein Fehler vorliegt)
+  # Optional: Eine Meldung nur im Terminal-Log, falls gewünscht (wird in Automator nicht angezeigt)
+  # echo "Info: Laufwerk ${LAUFWERKSNAME} (${MOUNT_POINT}) nicht gemountet. Prüfung übersprungen." >&2
+  exit 0
 fi
 
-echo "Check finished for ${VOLUME_NAME}."
+# --- Laufwerk ist gemountet, fahre fort ---
+echo "Starte Prüfung für ${LAUFWERKSNAME} unter ${MOUNT_POINT}..." # Terminal-Ausgabe bleibt
+
+# Speicherbelegung holen (Fehler von df unterdrücken, falls Mount Point zwischendurch verschwindet)
+df_ausgabe_prozent=$(df -Ph "$MOUNT_POINT" 2>/dev/null | awk 'NR==2 {print $5}')
+genutzte_prozent=$(echo "$df_ausgabe_prozent" | tr -d '%')
+echo "Debug: Roher Prozentwert von df: '$df_ausgabe_prozent'"      # Terminal-Ausgabe bleibt
+echo "Debug: Berechnete genutzte Prozent: '$genutzte_prozent'" # Terminal-Ausgabe bleibt
+
+# Variablen für die finale Benachrichtigung initialisieren
+nachricht_titel=""
+nachricht_text=""
+nachricht_sound=""
+nachricht_subtitle="Pfad: ${MOUNT_POINT}" # Subtitle immer anzeigen
+
+# Prüfen, ob genutzte_prozent eine gültige Zahl ist
+if [[ "$genutzte_prozent" =~ ^[0-9]+$ ]]; then
+  # Zahl ist gültig, Status bestimmen (Warnung oder OK)
+  if [[ "$genutzte_prozent" -ge "$SCHWELLENWERT_PROZENT" ]]; then
+    # Status: Warnung
+    nachricht_titel="⚠️ ${LAUFWERKSNAME} Warnung"
+    nachricht_text="${genutzte_prozent}% belegt (Hoch)" # Präziser Text
+    nachricht_sound="Frog"
+    echo "Warnung: ${nachricht_text}" # Terminal-Ausgabe
+  else
+    # Status: OK
+    nachricht_titel="✅ ${LAUFWERKSNAME} OK"
+    nachricht_text="${genutzte_prozent}% belegt" # Präziser Text
+    nachricht_sound="Glass"
+    echo "Erfolg: ${nachricht_text}" # Terminal-Ausgabe
+  fi
+else
+  # Fehler: Wert konnte nicht ermittelt werden (df fehlgeschlagen oder gab Müll zurück)
+  nachricht_titel="❌ ${LAUFWERKSNAME} Fehler"
+  nachricht_text="Auslastung nicht lesbar" # Präziser Text
+  nachricht_sound="Basso"
+  echo "Fehler: ${nachricht_text}. Rohwert: '$df_ausgabe_prozent'" >&2 # Terminal-Ausgabe
+fi
+
+# Nur EINE Benachrichtigung senden, wenn Titel/Text gesetzt wurden
+if [[ -n "$nachricht_titel" ]]; then
+  osascript -e "display notification \"${nachricht_text}\" with title \"${nachricht_titel}\" subtitle \"${nachricht_subtitle}\" sound name \"${nachricht_sound}\""
+fi
+
+echo "Prüfung für ${LAUFWERKSNAME} beendet." # Terminal-Ausgabe bleibt
