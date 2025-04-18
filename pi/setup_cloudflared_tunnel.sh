@@ -48,7 +48,7 @@ SSH_PORT=$(get_user_input "Geben Sie den SSH-Port ein" "22" is_valid_port "Ungü
 
 TUNNEL_NAME=$(get_user_input "Gib einen Namen für den neuen Tunnel ein (z.B. 'pi-zuhause')" "pi-tunnel" is_not_empty "Kein Tunnel-Name angegeben.") || exit 1
 HOSTNAME_TO_ROUTE=$(get_user_input "Welcher Hostname soll auf den Tunnel zeigen? (z.B. tozzi-test.de)" "tozzi-test.de" is_valid_hostname "Ungültiger Hostname oder leere Eingabe.") || exit 1
-INTERNAL_SERVICE_URL_DEFAULT="http://localhost:3000" # Z.B. Port, auf dem Caddy oder ein anderer Webserver auf dem Pi lauscht
+INTERNAL_SERVICE_URL_DEFAULT="http://localhost:8000" # Z.B. Port, auf dem Caddy oder ein anderer Webserver auf dem Pi lauscht
 INTERNAL_SERVICE_URL=$(get_user_input "Welche lokale Service-URL soll '$HOSTNAME_TO_ROUTE' aufrufen?" "$INTERNAL_SERVICE_URL_DEFAULT" is_not_empty "Leere Eingabe ist nicht erlaubt.") || exit 1
 echo ""
 
@@ -255,7 +255,6 @@ ssh -i "$SSH_KEY" -p "$SSH_PORT" -t "$PI_USER@$PI_HOST" << EOF || error "Fehler 
  # If issues arise, ensure the service has the correct token or uncomment/correct credentials-file.
  tunnel: \$TUNNEL_ID
  \$CRED_FILE_LINE
-
  # Optional: Logdatei für cloudflared
  # logfile: /var/log/cloudflared.log
  # loglevel: info
