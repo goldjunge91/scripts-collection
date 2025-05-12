@@ -42,12 +42,16 @@ fi
 if [ ! -d "$FRAMEWORKS_DIR/bats-support" ] || [ ! -d "$FRAMEWORKS_DIR/bats-assert" ]; then
     echo "Installing BATS plugins to $FRAMEWORKS_DIR..."
     
+    # Create a temporary directory
     TEMP_DIR=$(mktemp -d)
-    cd "$TEMP_DIR" || exit 1
+    CURRENT_DIR=$(pwd)
     
     # Clone BATS plugin repositories
-    git clone https://github.com/bats-core/bats-support.git
-    git clone https://github.com/bats-core/bats-assert.git
+    (
+        cd "$TEMP_DIR" || exit 1
+        git clone https://github.com/bats-core/bats-support.git
+        git clone https://github.com/bats-core/bats-assert.git
+    )
     
     # Copy to frameworks directory
     mkdir -p "$FRAMEWORKS_DIR"
@@ -57,34 +61,77 @@ if [ ! -d "$FRAMEWORKS_DIR/bats-support" ] || [ ! -d "$FRAMEWORKS_DIR/bats-asser
     # Clean up
     rm -rf "$TEMP_DIR"
     
+    # Make sure we're back in the original directory
+    cd "$CURRENT_DIR" || exit 1
+    
     echo "BATS plugins installed to $FRAMEWORKS_DIR!"
 fi
 
 # Create a helper file to load the plugins
 HELPER_FILE="$FRAMEWORKS_DIR/bats_load_helper.bash"
-if [ ! -f "$HELPER_FILE" ]; then
-    cat > "$HELPER_FILE" << EOF
+if [ -f "$HELPER_FILE" ]; then
+    rm "$HELPER_FILE"
+fi
+
+cat > "$HELPER_FILE" << 'EOF'
 #!/usr/bin/env bash
 # Helper script for loading BATS plugins
 
+# Get the directory of this script
+FRAMEWORKS_DIR="$(dirname "$BASH_SOURCE")"
+
+# Fixed paths to the plugins
+BATS_SUPPORT_DIR="${FRAMEWORKS_DIR}/bats-support"
+BATS_ASSERT_DIR="${FRAMEWORKS_DIR}/bats-assert"
+
 load_bats_support() {
-  load "$FRAMEWORKS_DIR/bats-support/load.bash"
+  if [ -f "${BATS_SUPPORT_DIR}/load.bash" ]; then
+    load "${BATS_SUPPORT_DIR}/load.bash"
+  else
+    echo "WARNING: bats-support not found at ${BATS_SUPPORT_DIR}"
+    return 1
+  fi
 }
 
 load_bats_assert() {
-  load "$FRAMEWORKS_DIR/bats-assert/load.bash"
+  if [ -f "${BATS_ASSERT_DIR}/load.bash" ]; then
+    load "${BATS_ASSERT_DIR}/load.bash"
+  else
+    echo "WARNING: bats-assert not found at ${BATS_ASSERT_DIR}"
+    return 1
+  fi
 }
 EOF
-    chmod +x "$HELPER_FILE"
-    echo "Created BATS helper file at $HELPER_FILE"
-fi
+
+chmod +x "$HELPER_FILE"
+echo "Created BATS helper file at $HELPER_FILE"
 
 # Make sure all required scripts are executable
 chmod +x "$SCRIPT_DIR/cleanup-node-modules.sh"
 chmod +x "$SCRIPT_DIR/logger.sh"
 chmod +x "$SCRIPT_DIR/tests-bats.sh"
 
+# Verify logger.sh is properly set up
+if [ ! -f "$SCRIPT_DIR/logger.sh" ]; then
+    echo "ERROR: logger.sh not found at $SCRIPT_DIR/logger.sh"
+    exit 1
+fi
+
+# Test the logger directly
+echo "Testing logger directly (should show colored output):"
+(
+    source "$SCRIPT_DIR/logger.sh"
+    logger_set_verbose true
+    log_error "Test error message"
+    log_warning "Test warning message"
+    log_info "Test info message"
+    log_debug "Test debug message"
+    log_success "Test success message"
+)
+echo ""
+
 echo "Running tests..."
-bats "$SCRIPT_DIR/tests-bats.sh"
+# Use BATS_COLOR=true to encourage color output
+BATS_COLOR=true bats "$SCRIPT_DIR/tests-bats.sh"
 
 echo "Tests completed!"

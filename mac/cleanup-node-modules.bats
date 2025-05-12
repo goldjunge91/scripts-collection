@@ -1,6 +1,5 @@
 #!/usr/bin/env bats
-# Tests for cleanup-node-modules.sh
-# Place this file in /Users/marco/Github/scripts-collection/mac
+# cleanup-node-modules.bats - Tests for cleanup-node-modules.sh
 
 # Path to the scripts (adjust if needed)
 SCRIPT_PATH="/Users/marco/Github/scripts-collection/mac/cleanup-node-modules.sh"
@@ -8,15 +7,30 @@ LOGGER_PATH="/Users/marco/Github/scripts-collection/mac/logger.sh"
 
 # Load test helpers if available
 FRAMEWORKS_DIR="/Users/marco/Github/scripts-collection/frameworks"
-if [ -f "$FRAMEWORKS_DIR/bats_load_helper.bash" ]; then
-    # Use source instead of load for the helper script
-    source "$FRAMEWORKS_DIR/bats_load_helper.bash"
-    # Ignore errors if plugins aren't available
-    load_bats_support || true
-    load_bats_assert || true
+if [ ! -d "$FRAMEWORKS_DIR" ]; then
+    mkdir -p "$FRAMEWORKS_DIR"
 fi
 
-# Add a function to check for ANSI color codes
+load_helper() {
+    # Check if helper exists
+    if [ ! -f "$FRAMEWORKS_DIR/bats-core-helper.bash" ]; then
+        cat > "$FRAMEWORKS_DIR/bats-core-helper.bash" << 'EOF'
+#!/usr/bin/env bash
+# Helper script for BATS tests
+
+# Enable colored output
+export BATS_COLOR=true
+export BATS_TERMINAL_WIDTH=120
+
+# Define colors for better test output
+export RED='\033[0;31m'
+export GREEN='\033[0;32m'
+export YELLOW='\033[0;33m'
+export BLUE='\033[0;34m'
+export CYAN='\033[0;36m'
+export NC='\033[0m' # No Color
+
+# Function to check for ANSI color codes
 has_color_code() {
     local str="$1"
     local color_pattern='\x1b\[[0-9;]*m'
@@ -27,6 +41,16 @@ has_color_code() {
         return 1  # Does not contain color code
     fi
 }
+EOF
+        chmod +x "$FRAMEWORKS_DIR/bats-core-helper.bash"
+    fi
+    
+    # Load the helper
+    source "$FRAMEWORKS_DIR/bats-core-helper.bash"
+}
+
+# Load helpers
+load_helper
 
 # Setup - runs before each test
 setup() {
@@ -34,13 +58,15 @@ setup() {
     TEST_DIR=$(mktemp -d)
     export TEST_DIR
 
-    # Create a minimal test structure with a few node_modules directories
+    # Create a test structure with node_modules directories
     mkdir -p "$TEST_DIR/project1/node_modules"
     mkdir -p "$TEST_DIR/project2/node_modules"
+    mkdir -p "$TEST_DIR/project3/subfolder/node_modules"
 
     # Create some files to give the directories size
     dd if=/dev/zero of="$TEST_DIR/project1/node_modules/file1" bs=1M count=2 2>/dev/null
     dd if=/dev/zero of="$TEST_DIR/project2/node_modules/file2" bs=1M count=3 2>/dev/null
+    dd if=/dev/zero of="$TEST_DIR/project3/subfolder/node_modules/file3" bs=512K count=4 2>/dev/null
 }
 
 # Teardown - runs after each test
@@ -63,23 +89,24 @@ count_node_modules() {
 
     # Check status and output
     [ "$status" -eq 0 ]
-    [[ "$output" =~ "Found 2 node_modules directories" ]]
+    [[ "$output" =~ "Found 3 node_modules directories" ]]
     [[ "$output" =~ "project1/node_modules" ]]
     [[ "$output" =~ "project2/node_modules" ]]
+    [[ "$output" =~ "project3/subfolder/node_modules" ]]
 }
 
 # Test 2: Dry-run mode doesn't delete anything
 @test "Dry-run mode doesn't delete anything" {
     # Count initial directories
     initial_count=$(count_node_modules "$TEST_DIR")
-    [ "$initial_count" -eq 2 ]
+    [ "$initial_count" -eq 3 ]
 
     # Run in dry-run mode
     run bash "$SCRIPT_PATH" "$TEST_DIR" --dry-run
 
     # Verify nothing was deleted
     after_count=$(count_node_modules "$TEST_DIR")
-    [ "$after_count" -eq 2 ]
+    [ "$after_count" -eq 3 ]
 }
 
 # Test 3: Directory parameter works correctly
@@ -112,9 +139,9 @@ count_node_modules() {
 @test "Deletion works when confirmed with 'yes'" {
     # Count initial directories
     initial_count=$(count_node_modules "$TEST_DIR")
-    [ "$initial_count" -eq 2 ]
+    [ "$initial_count" -eq 3 ]
 
-    # Run with 'yes' as input (instead of modifying the script)
+    # Run with 'yes' as input
     echo "yes" | run bash "$SCRIPT_PATH" "$TEST_DIR"
 
     # Verify directories were deleted
@@ -126,14 +153,14 @@ count_node_modules() {
 @test "No deletion occurs when responding with 'no'" {
     # Count initial directories
     initial_count=$(count_node_modules "$TEST_DIR")
-    [ "$initial_count" -eq 2 ]
+    [ "$initial_count" -eq 3 ]
 
     # Run with 'no' as input
     echo "no" | run bash "$SCRIPT_PATH" "$TEST_DIR"
 
     # Verify nothing was deleted
     after_count=$(count_node_modules "$TEST_DIR")
-    [ "$after_count" -eq 2 ]
+    [ "$after_count" -eq 3 ]
 }
 
 # Test 7: Verbose mode provides more output
@@ -146,7 +173,21 @@ count_node_modules() {
     [[ "$output" =~ "[DEBUG]" ]]
 }
 
-# Test 8: Create a test script to check logger functionality
+# Test 8: Test deeply nested directories
+@test "Script finds deeply nested node_modules directories" {
+    # Create a deeply nested structure
+    NESTED_DIR="$TEST_DIR/deep/nesting/structure/with/node_modules"
+    mkdir -p "$NESTED_DIR"
+    
+    # Run the script
+    run bash "$SCRIPT_PATH" "$TEST_DIR" --dry-run
+    
+    # Check that it found the deeply nested directory
+    [ "$status" -eq 0 ]
+    [[ "$output" =~ "deep/nesting/structure/with/node_modules" ]]
+}
+
+# Test 9: Create a test script to check logger functionality
 @test "Logger provides colorized output" {
     # Create a temporary test script
     TEST_SCRIPT="$TEST_DIR/test_logger.sh"
@@ -171,7 +212,7 @@ EOF
     # Run the test script directly (not with 'run' command to preserve colors)
     output=$("$TEST_SCRIPT")
     
-    # Check if output contains color codes
+    # Check if output contains expected messages
     [ -n "$output" ]
     [[ "$output" =~ "[ERROR]" ]]
     [[ "$output" =~ "[WARNING]" ]]
