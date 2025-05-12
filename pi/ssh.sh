@@ -15,7 +15,7 @@ sudo mkdir -p /home/marco/.ssh
 sudo chmod 700 /home/marco/.ssh
 
 sudo touch /home/username/.ssh/authorized_keys
-echo "ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAACAQCuZ7c+5p+/ZPxY4S3FEmvw7nhp1hmKfDH0/oslyF2m+yeeGV3ojdcPPN+K+tYpfDP3zzXT7H+4rKsmZ3LzlFrhxu/qZVMkv3x6eEOVA4Yaa/ZEyJO4yMN+9qfgkHREvu6wnSNeDdBIPIhtxtdikumYOEdGNZCl/3D67X8k8kjZdJAGLMXMaw1+B+jThpJs3m+5LJLQDGGT9ptrfjJmjlijNumjZ+7XMXv257VOS5IoiDESETTQMQhFWdeMykjMZKsvIXBcOylGbyIDeVlpdgHDnX9qhrMSceeYieOJO0DdsBJindke5e7A0eAixr+IvQzMCUf8NTLm96tEBPHWchqkga5cexoXkG1egL7kHudm9milSITFoAP87lQkmLq28tpTTLJPhEdCLQMfcsltjFL9RMdIwBHFbdwn/hWbBaAbE4sk/eiGbT1bfefAdC89rBff+ZS+Y5lW9Fuc5rS5RWLe0xjW8a9NO8zIMemRMtpabjuj3NJSLb/Uy9E8sarkaGlbkJPNaFz1y4hDzGlUCzo3UMbMnAa8cUbrN2wGejzHY4Ik2Hp5GDr2fmAphdOrGm/EsR8PRAVJx1Uxm+B8u5Cz2/iAtKI1FBysI/9v5kF/KjLobfljEbVoSsHLd5+pEnjKk02Af7SHp+/HWnXHKrYEZ6cjTabWfM8WU1JNkoKnqQ== tozzi@H3Mistral
+echo "ssh-rsa ### hier key eintrganen #####################################
 " | sudo tee /home/marco/.ssh/authorized_keys
 # Berechtigungen setzen
 sudo chmod 600 /home/marco/.ssh/authorized_keys
@@ -52,8 +52,7 @@ cp /etc/ssh/sshd_config /etc/ssh/sshd_config.bak
 # Füge deinen SSH Public Key hinzu - ERSETZE MIT DEINEM TATSÄCHLICHEN SSH PUBLIC KEY
 echo "Füge SSH Public Key hinzu..." | tee -a $LOG_FILE
 cat > /home/marco/.ssh/authorized_keys << 'EOF'
-ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAACAQCuZ7c+5p+/ZPxY4S3FEmvw7nhp1hmKfDH0/oslyF2m+yeeGV3ojdcPPN+K+tYpfDP3zzXT7H+4rKsmZ3LzlFrhxu/qZVMkv3x6eEOVA4Yaa/ZEyJO4yMN+9qfgkHREvu6wnSNeDdBIPIhtxtdikumYOEdGNZCl/3D67X8k8kjZdJAGLMXMaw1+B+jThpJs3m+5LJLQDGGT9ptrfjJmjlijNumjZ+7XMXv257VOS5IoiDESETTQMQhFWdeMykjMZKsvIXBcOylGbyIDeVlpdgHDnX9qhrMSceeYieOJO0DdsBJindke5e7A0eAixr+IvQzMCUf8NTLm96tEBPHWchqkga5cexoXkG1egL7kHudm9milSITFoAP87lQkmLq28tpTTLJPhEdCLQMfcsltjFL9RMdIwBHFbdwn/hWbBaAbE4sk/eiGbT1bfefAdC89rBff+ZS+Y5lW9Fuc5rS5RWLe0xjW8a9NO8zIMemRMtpabjuj3NJSLb/Uy9E8sarkaGlbkJPNaFz1y4hDzGlUCzo3UMbMnAa8cUbrN2wGejzHY4Ik2Hp5GDr2fmAphdOrGm/EsR8PRAVJx1Uxm+B8u5Cz2/iAtKI1FBysI/9v5kF/KjLobfljEbVoSsHLd5+pEnjKk02Af7SHp+/HWnXHKrYEZ6cjTabWfM8WU1JNkoKnqQ== tozzi@H3Mistral
-EOF
+### hier key eintrganen #####################################EOF
 # Setze richtige Berechtigungen
 chmod 600 /home/marco/.ssh/authorized_keys
 chown -R marco:marco /home/marco/.ssh
