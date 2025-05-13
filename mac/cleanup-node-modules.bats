@@ -33,9 +33,8 @@ load_helper
 
 # Setup - runs before each test
 setup() {
-    # Create a temporary test directory
-    TEST_DIR=$(mktemp -d)
-    export TEST_DIR
+    # Create test directory based on mode
+    create_test_dir "cleanup_node_modules_$(echo "$BATS_TEST_NAME" | tr ' ' '_')"
 
     # Create a test structure with node_modules directories
     mkdir -p "$TEST_DIR/project1/node_modules"
@@ -46,14 +45,15 @@ setup() {
     dd if=/dev/zero of="$TEST_DIR/project1/node_modules/file1" bs=1M count=2 2>/dev/null
     dd if=/dev/zero of="$TEST_DIR/project2/node_modules/file2" bs=1M count=3 2>/dev/null
     dd if=/dev/zero of="$TEST_DIR/project3/subfolder/node_modules/file3" bs=512K count=4 2>/dev/null
+    
+    # Log the test structure
+    log_test "INFO" "Created test structure with 3 node_modules directories"
 }
 
 # Teardown - runs after each test
 teardown() {
-    # Clean up the test directory
-    if [ -d "$TEST_DIR" ]; then
-        rm -rf "$TEST_DIR"
-    fi
+    # Clean up test directory based on mode
+    cleanup_test_dir
 }
 
 # Helper to count node_modules directories

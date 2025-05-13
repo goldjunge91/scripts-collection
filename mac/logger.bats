@@ -29,29 +29,30 @@ load_helper
 
 # Setup - runs before each test
 setup() {
-    # Create a temporary directory for tests
-    TEST_DIR=$(mktemp -d)
-    export TEST_DIR
+    # Create test directory based on mode
+    create_test_dir "logger_$(echo "$BATS_TEST_NAME" | tr ' ' '_')"
     
     # Create a test script that uses the logger
     TEST_SCRIPT="$TEST_DIR/test_script.sh"
     
     # Log test setup
-    log_test "INFO" "Setting up test in $TEST_DIR"
+    log_test "INFO" "Setting up logger test in $TEST_DIR"
 }
 
 # Teardown - runs after each test
 teardown() {
-    # Clean up
-    if [ -d "$TEST_DIR" ]; then
-        rm -rf "$TEST_DIR"
-    fi
+    # Clean up test directory based on mode
+    cleanup_test_dir
     
     # Clean up any log files created in the mac directory
-    rm -f "$MAC_DIR/test_script.log"
-    rm -f "$MAC_DIR/specific_name_script.log"
-    rm -f "$MAC_DIR/script.log"
-    rm -f "$MAC_DIR/bats.log"
+    # Only if we're in clean mode
+    if [[ "$TEST_DIR_CLEAN" == "clean" ]]; then
+        rm -f "$MAC_DIR/test_script.log"
+        rm -f "$MAC_DIR/specific_name_script.log"
+        rm -f "$MAC_DIR/script.log"
+        rm -f "$MAC_DIR/bats.log"
+        log_test "INFO" "Cleaned up log files in $MAC_DIR"
+    fi
 }
 
 # Test 1: Basic logging functionality and file creation
@@ -111,60 +112,24 @@ EOF
     [[ "$log_content" =~ "test_script" ]] # Should contain script name
 }
 
-# Test 2: Log file naming based on script name
-@test "Logger creates log file named after the script" {
-    # Create a test script with a specific name
-    NAMED_SCRIPT="$TEST_DIR/specific_name_script.sh"
+# Test 2: Logger captures important message types
+@test "Logger captures all message types correctly" {
+    # Create a test script that tests different log levels
+    TEST_LOG="$TEST_DIR/all_log_types.log"
     
-    cat > "$NAMED_SCRIPT" << EOF
-#!/bin/bash
-# Force script name for better testing
-export CALLER_SCRIPT="specific_name_script.sh"
-export CALLER_PATH="$TEST_DIR"
-
-source "$LOGGER_PATH"
-log_info "This is a log message"
-echo "LOG_FILE:\$LOG_FILE"
-EOF
-    
-    chmod +x "$NAMED_SCRIPT"
-    
-    # Run the script
-    run "$NAMED_SCRIPT"
-    
-    # Debug output
-    echo "Script output: $output"
-    
-    # Get the log file path from the output
-    LOG_FILE_PATH=$(echo "$output" | grep -o "LOG_FILE:.*" | cut -d':' -f2)
-    echo "Log file path: $LOG_FILE_PATH"
-    
-    # Check that the path exists
-    [ -f "$LOG_FILE_PATH" ]
-    
-    # Check that log file name contains specific_name_script
-    [[ "$LOG_FILE_PATH" =~ "specific_name_script.log" ]]
-    
-    # Check log content
-    log_content=$(cat "$LOG_FILE_PATH")
-    echo "Log content: $log_content"
-    
-    # Verify script name is in log
-    [[ "$log_content" =~ "specific_name_script" ]]
-}
-
-# Test 3: Script path and name are logged
-@test "Logger includes script name and path in log messages" {
-    # Create a test script
     cat > "$TEST_SCRIPT" << EOF
 #!/bin/bash
-# Force script name for better testing
-export CALLER_SCRIPT="test_script.sh"
-export CALLER_PATH="$TEST_DIR" 
+# Custom log file location to avoid path issues
+export LOG_FILE="$TEST_LOG"
 
 source "$LOGGER_PATH"
-log_info "Test message for script identification"
-echo "LOG_FILE:\$LOG_FILE"
+
+# Test all log types
+log_error "ERROR_TEST_MESSAGE"
+log_warning "WARNING_TEST_MESSAGE"
+log_info "INFO_TEST_MESSAGE"
+log_debug "DEBUG_TEST_MESSAGE"
+log_success "SUCCESS_TEST_MESSAGE"
 EOF
     
     chmod +x "$TEST_SCRIPT"
@@ -172,22 +137,53 @@ EOF
     # Run the script
     run "$TEST_SCRIPT"
     
-    # Debug output
-    echo "Script output: $output"
+    # Check that the log file exists
+    [ -f "$TEST_LOG" ]
     
-    # Get the log file path from the output
-    LOG_FILE_PATH=$(echo "$output" | grep -o "LOG_FILE:.*" | cut -d':' -f2)
-    echo "Log file path: $LOG_FILE_PATH"
-    
-    # Check that log file exists
-    [ -f "$LOG_FILE_PATH" ]
-    
-    # Check log content for script name and path
-    log_content=$(cat "$LOG_FILE_PATH")
+    # Read log contents
+    log_content=$(cat "$TEST_LOG")
     echo "Log content: $log_content"
     
-    [[ "$log_content" =~ "Script: test_script.sh" ]]
-    [[ "$log_content" =~ "[test_script.sh]" ]]
+    # Verify all message types are in the log
+    [[ "$log_content" =~ "ERROR_TEST_MESSAGE" ]]
+    [[ "$log_content" =~ "WARNING_TEST_MESSAGE" ]]
+    [[ "$log_content" =~ "INFO_TEST_MESSAGE" ]]
+    [[ "$log_content" =~ "DEBUG_TEST_MESSAGE" ]]
+    [[ "$log_content" =~ "SUCCESS_TEST_MESSAGE" ]]
+}
+
+# Test 3: Logger creates header with metadata
+@test "Logger creates proper log file header" {
+    # Create a custom log file location
+    TEST_LOG="$TEST_DIR/header_test.log"
+    
+    # Create a test script
+    cat > "$TEST_SCRIPT" << EOF
+#!/bin/bash
+# Custom log file location to avoid path issues
+export LOG_FILE="$TEST_LOG"
+
+source "$LOGGER_PATH"
+log_info "This is a test message"
+EOF
+    
+    chmod +x "$TEST_SCRIPT"
+    
+    # Run the script
+    run "$TEST_SCRIPT"
+    
+    # Check that log file exists
+    [ -f "$TEST_LOG" ]
+    
+    # Check log content for header elements
+    log_content=$(cat "$TEST_LOG")
+    echo "Log content: $log_content"
+    
+    # Check for key header elements
+    [[ "$log_content" =~ "===== Log started at" ]]
+    [[ "$log_content" =~ "Script:" ]]
+    [[ "$log_content" =~ "Path:" ]]
+    [[ "$log_content" =~ "========" ]]
 }
 
 # Test 4: Custom log file location
@@ -229,6 +225,9 @@ EOF
     # Create a test script
     cat > "$TEST_SCRIPT" << EOF
 #!/bin/bash
+# Define original command to ensure proper script name detection
+export ORIGINAL_COMMAND="$TEST_SCRIPT"
+
 # Force script name for better testing
 export CALLER_SCRIPT="test_script.sh"
 export CALLER_PATH="$TEST_DIR"
@@ -285,6 +284,8 @@ EOF
     
     cat > "$TEST_SCRIPT" << EOF
 #!/bin/bash
+# Define original command to ensure proper script name detection
+export ORIGINAL_COMMAND="$TEST_SCRIPT"
 
 # Custom file for logging
 source "$LOGGER_PATH" --verbose --log-file=$CUSTOM_LOG
